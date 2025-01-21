@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Space Shooter Game</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Press Start 2P', cursive;
+            background-color: black;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+        canvas {
+            border: 4px solid white;
+            image-rendering: pixelated;
+            background-color: #000;
+            width: 90vw;
+            height: auto;
+            max-width: 400px;
+            max-height: 300px;
+        }
+        #message {
+            display: none;
+            text-align: center;
+            margin-top: 80px;
+            font-size: 12px;
+            position: absolute;
+            top: 20px;
+        }
+        #message a {
+            color: #ff4081;
+            text-decoration: none;
+        }
+
+        .joystick-container {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 30vw;
+            height: 30vw;
+            background-color: rgba(255, 64, 129, 0.5);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .joystick-handle {
+            width: 50%;
+            height: 50%;
+            background-color: #ff4081;
+            border-radius: 50%;
+            position: absolute;
+            cursor: pointer;
+        }
+
+        @media(min-width: 768px) {
+            .joystick-container {
+                display: none;
+            }
+
+            #message {
+                font-size: 24px;
+            }
+        }
+
+        #rockCounter {
+            position: absolute;
+            text-align: center;
+            top: 50px;
+            font-size: 12px;
+            color: white;
+        }
+
+        canvas {
+            max-width: 330px;
+            max-height: 300px;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+</head>
+<body>
+    <canvas id="gameCanvas" width="400" height="300"></canvas>
+    <div id="message">
+        <p>You destroyed 24 Space Rocks</p>
+        <p>If you want to keep playing</p>
+        <p>Press Next Level</p>
+        <p><a href="next.html">Next Level</a></p>
+    </div>
+
+    <div class="joystick-container" id="joystickContainer">
+        <div class="joystick-handle" id="joystickHandle"></div>
+    </div>
+
+    <div id="rockCounter">Rocks Destroyed: 0</div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const messageDiv = document.getElementById('message');
+        const joystickContainer = document.getElementById('joystickContainer');
+        const joystickHandle = document.getElementById('joystickHandle');
+        const rockCounterDiv = document.getElementById('rockCounter');
+
+        // Adjust canvas size for responsiveness
+        function resizeCanvas() {
+            const scaleFactor = Math.min(window.innerWidth / 400, window.innerHeight / 300);
+            canvas.style.width = `${400 * scaleFactor}px`;
+            canvas.style.height = `${300 * scaleFactor}px`;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Player variables
+        const player = {
+            x: 50,
+            y: 150,
+            width: 20,
+            height: 40,
+            color: '#ff4081',
+            speed: 2.5,
+            exhaustOpacity: 1,
+            exhaustSize: 10,
+        };
+
+        // Goal variables (positioned at the top center)
+        const goal = {
+            x: canvas.width / 2 - 10,
+            y: 20,
+            width: 20,
+            height: 20,
+            color: 'gold',
+            visible: false // Initially hidden
+        };
+
+        // Rock variables
+        const rocks = [];
+        const maxRocks = 24; // Limit to 20 rocks
+        const rockSpeed = 0.5;
+        let rockGenerated = false; // Track whether a rock is currently on screen
+        let clearedRocksCount = 0; // Track number of cleared rocks
+
+        function generateRock() {
+            if (rocks.length < maxRocks && !rockGenerated) {
+                // Generate 1 rock at a time
+                const rockWidth = 30;
+                const rockHeight = 30;
+                const x = Math.random() * (canvas.width - rockWidth);
+                const y = -rockHeight;
+                const rock = {
+                    x,
+                    y,
+                    width: rockWidth,
+                    height: rockHeight,
+                    color: 'gray'
+                };
+                rocks.push(rock);
+                rockGenerated = true; // Prevent further rocks from being generated until the current one is cleared
+            }
+        }
+
+        // Bullet variables
+        const bullets = [];
+        const bulletSpeed = 3;
+        let lastShotTime = 0; // Time of last bullet shot
+
+        function shootBullet() {
+            const currentTime = Date.now();
+            if (currentTime - lastShotTime >= 500) { // Fire every 2 seconds
+                const bullet = {
+                    x: player.x + player.width / 2 - 2.5, // Centered horizontally
+                    y: player.y,
+                    width: 5,
+                    height: 10,
+                    color: 'red'
+                };
+                bullets.push(bullet);
+                lastShotTime = currentTime; // Update the last shot time
+            }
+        }
+
+        // Joystick input tracking
+        let joystickAngle = 0;
+        let joystickMagnitude = 0;
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        joystickContainer.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+        });
+
+        joystickContainer.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const deltaX = touch.clientX - touchStartX;
+            const deltaY = touch.clientY - touchStartY;
+            const distance = Math.min(Math.sqrt(deltaX * deltaX + deltaY * deltaY), 50);
+            joystickHandle.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+
+            joystickAngle = Math.atan2(deltaY, deltaX);
+            joystickMagnitude = distance / 50;
+        });
+
+        joystickContainer.addEventListener('touchend', () => {
+            joystickHandle.style.transform = 'translate(0, 0)';
+            joystickAngle = 0;
+            joystickMagnitude = 0;
+        });
+
+        // Keyboard input tracking
+        const keys = {
+            ArrowUp: false,
+            ArrowDown: false,
+            ArrowLeft: false,
+            ArrowRight: false,
+            Space: false
+        };
+
+        window.addEventListener('keydown', (e) => {
+            if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
+        });
+
+        function update() {
+            // Update player position based on input
+            let moveX = 0;
+            let moveY = 0;
+
+            if (window.innerWidth >= 768) {
+                if (keys.ArrowUp) moveY -= player.speed;
+                if (keys.ArrowDown) moveY += player.speed;
+                if (keys.ArrowLeft) moveX -= player.speed;
+                if (keys.ArrowRight) moveX += player.speed;
+            } else {
+                moveX = Math.cos(joystickAngle) * joystickMagnitude * player.speed;
+                moveY = Math.sin(joystickAngle) * joystickMagnitude * player.speed;
+            }
+
+            player.x += moveX;
+            player.y += moveY;
+
+            player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+            player.y = Math.max(0, Math.min(canvas.height - player.height, player.y));
+
+            // Automatically shoot bullets every 2 seconds
+            shootBullet();
+
+            // Update bullet positions (straight line)
+            for (let i = 0; i < bullets.length; i++) {
+                bullets[i].y -= bulletSpeed; // Move bullets straight up
+            }
+
+            // Remove bullets that have gone off-screen
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                if (bullets[i].y <= 0) {
+                    bullets.splice(i, 1);
+                }
+            }
+
+            // Check for collision with goal
+            if (
+                player.x < goal.x + goal.width &&
+                player.x + player.width > goal.x &&
+                player.y < goal.y + goal.height &&
+                player.y + player.height > goal.y &&
+                goal.visible // Goal must be visible
+            ) {
+                messageDiv.style.display = 'block';
+                cancelAnimationFrame(animationFrame);
+            }
+
+            // Check for collision with rocks
+            for (let i = rocks.length - 1; i >= 0; i--) {
+                const rock = rocks[i];
+                for (let j = bullets.length - 1; j >= 0; j--) {
+                    const bullet = bullets[j];
+                    if (
+                        bullet.x < rock.x + rock.width &&
+                        bullet.x + bullet.width > rock.x &&
+                        bullet.y < rock.y + rock.height &&
+                        bullet.y + bullet.height > rock.y
+                    ) {
+                        // Bullet hits rock, remove both
+                        rocks.splice(i, 1);
+                        bullets.splice(j, 1);
+                        rockGenerated = false; // Allow the next rock to appear
+                        clearedRocksCount++; // Increase cleared rocks count
+                        break;
+                    }
+                }
+            }
+
+            // Move rocks down
+            for (let i = rocks.length - 1; i >= 0; i--) {
+                rocks[i].y += rockSpeed;
+            }
+
+            // Remove rocks that have gone off-screen
+            for (let i = rocks.length - 1; i >= 0; i--) {
+                if (rocks[i].y > canvas.height) {
+                    rocks.splice(i, 1);
+                    rockGenerated = false; // Allow the next rock to appear
+                }
+            }
+
+            // Show goal after 20 cleared rocks
+            if (clearedRocksCount >= 1) {
+                goal.visible = true;
+            }
+
+            // Update the rock counter display
+            rockCounterDiv.textContent = `Space Rocks Destroyed: ${clearedRocksCount}`;
+            if (clearedRocksCount >= 1) {
+                rockCounterDiv.visible = false;
+            }
+        }
+
+        function draw() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw pixelated spaceship (always facing the goal)
+            ctx.fillStyle = '#ff4081';
+
+            // Draw spaceship body (triangular)
+            ctx.beginPath();
+            ctx.moveTo(player.x, player.y + player.height); // Bottom-left
+            ctx.lineTo(player.x + player.width, player.y + player.height); // Bottom-right
+            ctx.lineTo(player.x + player.width / 2, player.y); // Top-center (facing goal)
+            ctx.closePath();
+            ctx.fill();
+
+            // Draw wings (left and right)
+            ctx.fillStyle = '#ff1e6a';
+            ctx.beginPath();
+            ctx.moveTo(player.x + 3, player.y + player.height / 2); // Left wing top
+            ctx.lineTo(player.x - 10, player.y + player.height); // Left wing bottom
+            ctx.lineTo(player.x + 3, player.y + player.height); // Left wing bottom
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(player.x + player.width - 3, player.y + player.height / 2); // Right wing top
+            ctx.lineTo(player.x + player.width + 10, player.y + player.height); // Right wing bottom
+            ctx.lineTo(player.x + player.width - 3, player.y + player.height); // Right wing bottom
+            ctx.closePath();
+            ctx.fill();
+
+            // Draw exhaust particles with fading effect
+            ctx.fillStyle = `rgba(255, 64, 129, ${player.exhaustOpacity})`;
+            ctx.beginPath();
+            ctx.arc(player.x + player.width / 2, player.y + player.height, player.exhaustSize, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.fill();
+
+            player.exhaustOpacity -= 0.05;
+            if (player.exhaustOpacity < 0) player.exhaustOpacity = 1;
+
+            player.exhaustSize = (player.exhaustSize === 10) ? 5 : 10;
+
+            // Draw rocks only if the goal is not visible
+            if (!goal.visible) {
+    for (const rock of rocks) {
+        // Randomly adjust the size and shape to create an irregular rock shape
+        const rockShape = Math.random() * 2 > 1 ? 'ellipse' : 'rectangle';
+        
+        // Set the fill style with a gradient or texture
+        const gradient = ctx.createRadialGradient(rock.x + rock.width / 2, rock.y + rock.height / 2, 0, rock.x + rock.width / 2, rock.y + rock.height / 2, rock.width / 2);
+        gradient.addColorStop(0, 'gray');
+        gradient.addColorStop(1, 'darkgray');
+        
+        ctx.fillStyle = gradient;
+        
+        // Apply a random rotation to create an irregular appearance
+        ctx.save();
+        ctx.translate(rock.x + rock.width / 2, rock.y + rock.height / 2);
+        ctx.rotate(Math.random() * 2 * Math.PI); // Random rotation between 0 and 2π
+        ctx.translate(-(rock.x + rock.width / 2), -(rock.y + rock.height / 2));
+
+        // Draw an irregular rock shape (either ellipse or rectangle)
+        if (rockShape === 'ellipse') {
+            ctx.beginPath();
+            ctx.ellipse(rock.x + rock.width / 2, rock.y + rock.height / 2, rock.width / 2, rock.height / 2, 0, 0, 2 * Math.PI);
+            ctx.fill();
+        } else {
+            ctx.fillRect(rock.x, rock.y, rock.width, rock.height);
+        }
+        
+        ctx.restore();
+    }
+}
+
+
+            // Draw bullets
+            for (const bullet of bullets) {
+    ctx.fillStyle = bullet.color;
+    ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+}
+
+// Draw goal (portal if visible)
+if (goal.visible) {
+    // Adjust the portal's vertical position to make it lower on the screen
+    const portalYPosition = goal.y + 50; // Move the portal 50 units lower
+
+    // Draw the portal's outer circle (glowing effect)
+    const glowSize = 30 + Math.sin(Date.now() / 200) * 10; // Pulsing effect
+    ctx.fillStyle = `rgba(0, 255, 255, 0.6)`; // Cyan glow
+    ctx.beginPath();
+    ctx.arc(goal.x + goal.width / 2, portalYPosition + goal.height / 2, glowSize, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fill();
+
+    // Draw the portal's inner circle (core)
+    ctx.fillStyle = `rgba(0, 255, 255, 1)`; // Bright cyan core
+    ctx.beginPath();
+    ctx.arc(goal.x + goal.width / 2, portalYPosition + goal.height / 2, 15, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fill();
+}
+
+
+            
+        }
+
+        function gameLoop() {
+            
+            generateRock();
+            update();
+            draw();
+            animationFrame = requestAnimationFrame(gameLoop);
+        }
+
+        let animationFrame = requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
