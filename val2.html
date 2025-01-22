@@ -23,10 +23,6 @@
             font-size: 40px;
             margin: 10px 0;
         }
-        p {
-            font-size: 18px;
-            margin: 5px 0;
-        }
         a {
             color: cyan;
             text-decoration: none;
@@ -46,33 +42,6 @@
             right: 50%;
             transform: translateX(50%);
             text-align: center;
-        }
-        @media (max-width: 768px) {
-            h1 {
-                font-size: 30px;
-            }
-            p {
-                font-size: 16px;
-            }
-            a {
-                font-size: 14px;
-            }
-        }
-        @media (max-width: 480px) {
-            h1 {
-                font-size: 24px;
-            }
-            p {
-                font-size: 14px;
-            }
-            a {
-                font-size: 12px;
-            }
-            .buts {
-                bottom: 8%;
-                right: 50%;
-                transform: translateX(50%);
-            }
         }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -105,6 +74,31 @@
             e.preventDefault();
             triggerConfetti();
             document.querySelector('h1').innerHTML = "Thank you, Love!<br><br>You're the best<br><br>I Love You";
+            
+            // Replace the Yes button with a Home button
+            const homeButton = document.createElement('a');
+            homeButton.href = 'index.html';
+            homeButton.textContent = 'Home';
+            homeButton.style.color = 'cyan';
+            homeButton.style.textDecoration = 'none';
+            homeButton.style.fontSize = '16px';
+            homeButton.style.padding = '10px 20px';
+            homeButton.style.margin = '5px';
+            homeButton.style.display = 'inline-block';
+            homeButton.style.transition = 'background-color 0.3s, color 0.3s';
+            homeButton.style.backgroundColor = 'transparent';
+            homeButton.onmouseover = () => {
+                homeButton.style.backgroundColor = 'cyan';
+                homeButton.style.color = 'black';
+            };
+            homeButton.onmouseout = () => {
+                homeButton.style.backgroundColor = 'transparent';
+                homeButton.style.color = 'cyan';
+            };
+
+            const parent = document.querySelector('.buts');
+            const yesButton = document.getElementById('yesButton');
+            parent.replaceChild(homeButton, yesButton);
         });
 
         document.getElementById('noButton').addEventListener('click', (e) => {
